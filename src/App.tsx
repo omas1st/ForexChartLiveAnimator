@@ -13,8 +13,7 @@ import { generateCandlesAlongPath } from './utils/candleGenerator';
 import { synchronizedAudioPlayer, playTickSound } from './utils/audio';
 import { Header } from './components/Header';
 import { ChartCanvas } from './components/ChartCanvas';
-import { DrawingToolbar } from './components/DrawingToolbar';
-import { PlaybackControls } from './components/PlaybackControls';
+import { AppBottomDock } from './components/AppBottomDock';
 import { FloatingTextToolbar } from './components/FloatingTextToolbar';
 import { TextLayersModal } from './components/TextLayersModal';
 import { AudioModal } from './components/AudioModal';
@@ -311,78 +310,59 @@ export const App: React.FC = () => {
   const currentTimeRatio = playback.duration > 0 ? playback.currentTime / playback.duration : 0;
 
   return (
-    <div className="min-h-screen w-full bg-[#0E1015] text-slate-100 flex flex-col font-sans p-3 sm:p-4 md:p-6 select-none">
-      <div className="w-full max-w-7xl mx-auto flex flex-col gap-3 sm:gap-4 flex-1">
-        {/* Header with Upload & MP4 Video Export */}
-        <Header
-          onUploadImage={handleUploadImage}
-          onOpenExportModal={() => setIsExportModalOpen(true)}
-          bullishColor={bullishColor}
-          bearishColor={bearishColor}
-          onChangeBullishColor={setBullishColor}
-          onChangeBearishColor={setBearishColor}
-        />
+    <div className="h-[100dvh] w-full bg-[#0A0C10] text-slate-100 flex flex-col font-sans select-none overflow-hidden">
+      {/* Top Native App Header */}
+      <Header
+        onUploadImage={handleUploadImage}
+        onOpenExportModal={() => setIsExportModalOpen(true)}
+        bullishColor={bullishColor}
+        bearishColor={bearishColor}
+        onChangeBullishColor={setBullishColor}
+        onChangeBearishColor={setBearishColor}
+      />
 
-        {/* Path Tool, Freehand Pen, Text Tool & Candlestick Spacing/Geometry Adjuster */}
-        <DrawingToolbar
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          onResetPath={() => {
-            setPathPoints([]);
-            setCandles([]);
-          }}
-          onDeleteSelectedText={handleDeleteSelectedText}
-          selectedTextId={selectedTextId}
-          candleSizing={candleSizing}
-          onUpdateCandleSizing={(sizing) => setCandleSizing((prev) => ({ ...prev, ...sizing }))}
-          userTexts={userTexts}
-          onAddTextDirectly={() => handleAddTextDirectly('Order Block (OB)')}
-          onClearAll={handleClearAll}
-        />
+      {/* Center Maximized Interactive Canvas Stage */}
+      <main className="flex-1 min-h-0 w-full relative flex items-center justify-center p-1.5 sm:p-3 overflow-hidden bg-[#08090C]">
+        <div 
+          className="w-full h-full relative flex items-center justify-center"
+          style={
+            chartImage && chartImage.naturalWidth > 0
+              ? {
+                  aspectRatio: `${chartImage.naturalWidth} / ${chartImage.naturalHeight}`,
+                  maxHeight: '100%',
+                  maxWidth: '100%',
+                }
+              : {
+                  aspectRatio: '16 / 9',
+                  maxHeight: '100%',
+                  maxWidth: '100%',
+                }
+          }
+        >
+          <ChartCanvas
+            backgroundImage={chartImage}
+            pathPoints={pathPoints}
+            onUpdatePathPoints={(pts) => {
+              setPathPoints(pts);
+              setPlayback((prev) => ({ ...prev, currentTime: 0, isPlaying: true }));
+            }}
+            candles={candles}
+            candleSizing={candleSizing}
+            userDrawings={userDrawings}
+            onAddUserDrawing={(d) => setUserDrawings((prev) => [...prev, d])}
+            userTexts={userTexts}
+            onAddUserText={handleAddUserText}
+            onUpdateUserText={handleUpdateUserText}
+            onDeleteUserText={handleDeleteUserText}
+            selectedTextId={selectedTextId}
+            onSelectTextId={setSelectedTextId}
+            activeTool={activeTool}
+            currentTimeRatio={currentTimeRatio}
+            bullishColor={bullishColor}
+            bearishColor={bearishColor}
+          />
 
-        {/* Live Canvas Area with interactive text & straight path waypoints */}
-        <div className="flex-1 w-full min-h-[460px] sm:min-h-[540px] flex flex-col items-center justify-center gap-2.5">
-          <div 
-            className="w-full h-full relative flex items-center justify-center"
-            style={
-              chartImage && chartImage.naturalWidth > 0
-                ? {
-                    aspectRatio: `${chartImage.naturalWidth} / ${chartImage.naturalHeight}`,
-                    maxHeight: '74vh',
-                    maxWidth: '100%',
-                  }
-                : {
-                    aspectRatio: '16 / 9',
-                    maxHeight: '74vh',
-                    maxWidth: '100%',
-                  }
-            }
-          >
-            <ChartCanvas
-              backgroundImage={chartImage}
-              pathPoints={pathPoints}
-              onUpdatePathPoints={(pts) => {
-                setPathPoints(pts);
-                setPlayback((prev) => ({ ...prev, currentTime: 0, isPlaying: true }));
-              }}
-              candles={candles}
-              candleSizing={candleSizing}
-              userDrawings={userDrawings}
-              onAddUserDrawing={(d) => setUserDrawings((prev) => [...prev, d])}
-              userTexts={userTexts}
-              onAddUserText={handleAddUserText}
-              onUpdateUserText={handleUpdateUserText}
-              onDeleteUserText={handleDeleteUserText}
-              selectedTextId={selectedTextId}
-              onSelectTextId={setSelectedTextId}
-              activeTool={activeTool}
-              currentTimeRatio={currentTimeRatio}
-              bullishColor={bullishColor}
-              bearishColor={bearishColor}
-            />
-          </div>
-
-          {/* Floating Rich Text Properties & Styling Toolbar (Shows when text is selected or text tool active) */}
+          {/* Floating Rich Text Properties Toolbar (Bottom sheet style overlay) */}
           {(selectedText || activeTool === 'text') && (
             <FloatingTextToolbar
               selectedText={selectedText}
@@ -400,20 +380,30 @@ export const App: React.FC = () => {
             />
           )}
         </div>
+      </main>
 
-        {/* Playback Controls (Configurable duration up to 120s, background music, speed, scrubber) */}
-        <PlaybackControls
-          playback={playback}
-          onTogglePlay={handleTogglePlay}
-          onSeek={handleSeek}
-          onReset={handleReset}
-          onSetPlaybackRate={handleSetPlaybackRate}
-          onToggleSound={handleToggleSound}
-          onToggleLoop={handleToggleLoop}
-          onSetDuration={handleSetDuration}
-          onOpenAudioModal={() => setIsAudioModalOpen(true)}
-        />
-      </div>
+      {/* Bottom Native App Dock: Scrubber, Playback, and Tools Bar */}
+      <AppBottomDock
+        playback={playback}
+        onTogglePlay={handleTogglePlay}
+        onSeek={handleSeek}
+        onReset={handleReset}
+        onSetDuration={handleSetDuration}
+        onOpenAudioModal={() => setIsAudioModalOpen(true)}
+        activeTool={activeTool}
+        onSelectTool={setActiveTool}
+        onResetPath={() => {
+          setPathPoints([]);
+          setCandles([]);
+        }}
+        candleSizing={candleSizing}
+        onUpdateCandleSizing={(sizing) => setCandleSizing((prev) => ({ ...prev, ...sizing }))}
+        userTexts={userTexts}
+        selectedTextId={selectedTextId}
+        onAddTextDirectly={() => handleAddTextDirectly('Order Block (OB)')}
+        onDeleteSelectedText={handleDeleteSelectedText}
+        onClearAll={handleClearAll}
+      />
 
       {/* Text Layers Management Modal */}
       <TextLayersModal

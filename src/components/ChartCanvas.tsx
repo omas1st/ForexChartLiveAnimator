@@ -361,13 +361,13 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
 
       {/* Path Tool Active Status & Actions Banner */}
       {activeTool === 'path' && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
-          <div className="px-4 py-2 rounded-full bg-[#16181D]/90 backdrop-blur-md border border-cyan-500/50 text-xs font-semibold text-cyan-300 shadow-xl flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-            <span>
+        <div className="absolute top-2 sm:top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 sm:gap-2 z-10 max-w-[95%]">
+          <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-[#12141A]/95 backdrop-blur-md border border-cyan-500/50 text-[11px] sm:text-xs font-semibold text-cyan-300 shadow-xl flex items-center gap-2 truncate">
+            <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-cyan-400 animate-ping shrink-0" />
+            <span className="truncate">
               {activePathPoints.length === 0
-                ? 'Tap on chart to place 1st waypoint'
-                : `Point ${activePathPoints.length} set. Tap to change direction (Double-tap to finish)`}
+                ? 'Tap chart to place 1st waypoint'
+                : `Pt ${activePathPoints.length} set · Tap next (Double-tap finish)`}
             </span>
           </div>
 
@@ -375,10 +375,10 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
             <button
               id="finish-path-btn"
               onClick={handleFinishPath}
-              className="flex items-center gap-1 px-3.5 py-2 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/30 transition-transform active:scale-95"
+              className="flex items-center gap-1 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[11px] sm:text-xs shadow-lg shadow-cyan-500/30 transition-transform active:scale-95 shrink-0"
             >
               <Check className="w-3.5 h-3.5 stroke-[3]" />
-              <span>Finish Path</span>
+              <span>Done</span>
             </button>
           )}
 
@@ -386,7 +386,7 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
             <button
               id="cancel-path-btn"
               onClick={handleCancelPath}
-              className="flex items-center gap-1 px-3 py-2 rounded-full bg-[#2D3139]/90 hover:bg-[#3E4451] text-slate-300 text-xs font-semibold border border-slate-600 transition-colors"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full bg-[#2D3139]/90 hover:bg-[#3E4451] text-slate-300 text-[11px] sm:text-xs font-semibold border border-slate-600 transition-colors shrink-0"
             >
               <RotateCcw className="w-3 h-3" />
               <span>Cancel</span>
@@ -397,25 +397,25 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
 
       {/* Floating Freehand Pen Instructions Banner */}
       {activeTool === 'pen' && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-cyan-500/20 backdrop-blur-md border border-cyan-500/40 text-xs font-semibold text-cyan-300 pointer-events-none shadow-lg flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span>Draw freehand to define trajectory</span>
+        <div className="absolute top-2 sm:top-3 left-1/2 -translate-x-1/2 px-3 sm:px-4 py-1.5 rounded-full bg-cyan-500/20 backdrop-blur-md border border-cyan-500/40 text-[11px] sm:text-xs font-semibold text-cyan-300 pointer-events-none shadow-lg flex items-center gap-1.5 sm:gap-2 max-w-[90%] truncate">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+          <span className="truncate">Draw freehand to define trajectory</span>
         </div>
       )}
 
       {/* Floating Text Instructions Banner */}
       {activeTool === 'text' && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-500/40 text-xs font-semibold text-emerald-300 pointer-events-none shadow-lg flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Click anywhere on chart to add text note (drag to move)</span>
+        <div className="absolute top-2 sm:top-3 left-1/2 -translate-x-1/2 px-3 sm:px-4 py-1.5 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-500/40 text-[11px] sm:text-xs font-semibold text-emerald-300 pointer-events-none shadow-lg flex items-center gap-1.5 sm:gap-2 max-w-[90%] truncate">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <span className="truncate">Tap chart to add text label</span>
         </div>
       )}
 
       {/* Helpful overlay when no path exists on uploaded chart */}
       {pathPoints.length < 2 && activePathPoints.length === 0 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-2xl bg-[#16181D]/90 backdrop-blur-md border border-[#2D3139] text-xs text-slate-300 shadow-2xl flex items-center gap-2.5 pointer-events-none">
-          <span className="w-2 h-2 rounded-full bg-cyan-400" />
-          <span>Select <strong>Path Tool</strong> above and tap on your chart to generate candlesticks</span>
+        <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-2xl bg-[#12141A]/95 backdrop-blur-md border border-[#2D3139] text-[11px] sm:text-xs text-slate-300 shadow-2xl flex items-center gap-2 pointer-events-none max-w-[90%] text-center">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+          <span>Tap on chart with <strong>Path Tool</strong> to generate live animated candles</span>
         </div>
       )}
     </div>
