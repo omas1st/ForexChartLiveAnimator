@@ -1,0 +1,7 @@
+{
+  "name": "Forex Chart Live Animator",
+  "description": "Transform forex chart screenshots and drawing tools into 10-second live animated candlestick videos with MP4 export for social media.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
