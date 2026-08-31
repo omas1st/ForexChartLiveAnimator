@@ -71,12 +71,16 @@ export interface AudioTrack {
 
 export type AspectRatioType = 'original' | '9:16' | '16:9' | '1:1';
 
+export type WatermarkPosition = 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
+
 export interface ExportSettings {
   aspectRatio: AspectRatioType;
   durationSeconds: number; // 3 to 120 seconds
   fps: number;
   authorHandle?: string;
   showWatermark?: boolean;
+  watermarkText?: string;
+  watermarkPosition?: WatermarkPosition;
   audioTrack?: AudioTrack | null;
 }
 

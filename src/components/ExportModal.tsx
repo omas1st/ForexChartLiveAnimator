@@ -13,10 +13,17 @@ import {
   Clock,
   Zap,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  ShieldAlert,
+  Shield,
+  AtSign,
+  ArrowDownLeft,
+  ArrowDownRight,
+  ArrowUpLeft,
+  ArrowUpRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { ExportSettings, AspectRatioType, Point, Candle, CandleSizing, UserDrawing, UserText, AudioTrack } from '../types';
+import { ExportSettings, AspectRatioType, Point, Candle, CandleSizing, UserDrawing, UserText, AudioTrack, WatermarkPosition } from '../types';
 import { recordAnimationToVideo, RecordingResult, downloadVideoBlob, shareVideoFile, isMobileDevice } from '../utils/videoRecorder';
 import { renderForexChartToContext } from './renderForexChart';
 
@@ -57,7 +64,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     durationSeconds: videoDurationSeconds,
     fps: isMobile ? 30 : 60,
     authorHandle: '',
-    showWatermark: false,
+    showWatermark: true,
+    watermarkText: '⚠️ NOT FINANCIAL ADVICE • DO YOUR OWN RESEARCH (DYOR)',
+    watermarkPosition: 'bottom-left',
     audioTrack: audioTrack,
   });
 
@@ -158,6 +167,28 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     }
     setTimeout(() => setShareSuccess(null), 4000);
   };
+
+  const disclaimerPresets = [
+    {
+      title: 'Standard DYOR',
+      text: '⚠️ NOT FINANCIAL ADVICE • DO YOUR OWN RESEARCH (DYOR)',
+    },
+    {
+      title: 'Do Not Trade',
+      text: '⚠️ DO NOT TRADE • AI ANIMATION CONTENT ONLY • DYOR',
+    },
+    {
+      title: 'Educational Only',
+      text: '⚠️ FOR EDUCATIONAL & VISUAL SIMULATION ONLY • NOT ADVICE',
+    },
+  ];
+
+  const watermarkAngles: { id: WatermarkPosition; label: string; icon: React.ReactNode }[] = [
+    { id: 'bottom-left', label: 'Bottom Left', icon: <ArrowDownLeft className="w-3.5 h-3.5" /> },
+    { id: 'bottom-right', label: 'Bottom Right', icon: <ArrowDownRight className="w-3.5 h-3.5" /> },
+    { id: 'top-left', label: 'Top Left', icon: <ArrowUpLeft className="w-3.5 h-3.5" /> },
+    { id: 'top-right', label: 'Top Right', icon: <ArrowUpRight className="w-3.5 h-3.5" /> },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -341,6 +372,138 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </div>
               </div>
 
+              {/* 3. Legal Disclaimer Watermark Section */}
+              <div className="p-3.5 rounded-2xl bg-[#13151B] border border-[#2D3139] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                        3. Disclaimer Watermark
+                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          Recommended
+                        </span>
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        Warns viewers: Not financial advice · DYOR · AI animation only
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.showWatermark !== false}
+                      onChange={(e) => setSettings({ ...settings, showWatermark: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-[#2D3139] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {settings.showWatermark !== false && (
+                  <div className="space-y-3 pt-2 border-t border-[#2D3139]/60 text-xs">
+                    {/* Corner / Angle Placement */}
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                        Watermark Angle / Corner
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        {watermarkAngles.map((angle) => {
+                          const isSelected = (settings.watermarkPosition || 'bottom-left') === angle.id;
+                          return (
+                            <button
+                              key={angle.id}
+                              type="button"
+                              onClick={() => setSettings({ ...settings, watermarkPosition: angle.id })}
+                              className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border font-semibold text-[11px] transition-all ${
+                                isSelected
+                                  ? 'bg-amber-500/15 border-amber-500 text-amber-300 shadow-sm shadow-amber-500/10'
+                                  : 'bg-[#1A1D24] border-[#2D3139] text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              {angle.icon}
+                              <span>{angle.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Disclaimer Text Selection */}
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                        Disclaimer Preset Text
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {disclaimerPresets.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setSettings({ ...settings, watermarkText: preset.text })}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] border font-medium transition-colors ${
+                              settings.watermarkText === preset.text
+                                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                                : 'bg-[#1F2229] border-[#2D3139] text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            {preset.title}
+                          </button>
+                        ))}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={settings.watermarkText || ''}
+                        onChange={(e) => setSettings({ ...settings, watermarkText: e.target.value })}
+                        placeholder="⚠️ NOT FINANCIAL ADVICE • DO YOUR OWN RESEARCH (DYOR)"
+                        className="w-full bg-[#0A0B0D] border border-[#2D3139] focus:border-amber-500 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none font-medium"
+                      />
+                    </div>
+
+                    {/* Creator Handle (Optional) */}
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                        Creator / Channel Handle (Optional)
+                      </span>
+                      <div className="relative">
+                        <AtSign className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          value={settings.authorHandle || ''}
+                          onChange={(e) => setSettings({ ...settings, authorHandle: e.target.value })}
+                          placeholder="YourChannel / YourName"
+                          className="w-full bg-[#0A0B0D] border border-[#2D3139] focus:border-cyan-500 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Live Watermark Appearance Preview */}
+                    <div className="p-2.5 rounded-xl bg-[#0A0B0D] border border-amber-500/30">
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                        Live Watermark Preview on Video ({settings.watermarkPosition || 'bottom-left'}):
+                      </span>
+                      <div className="p-2 rounded-lg bg-black/70 border border-amber-500/40 text-left font-sans">
+                        <div className="text-[10px] font-bold text-amber-400 tracking-wide">
+                          {settings.watermarkText || '⚠️ NOT FINANCIAL ADVICE • DO YOUR OWN RESEARCH (DYOR)'}
+                        </div>
+                        <div className="text-[9px] font-semibold text-slate-200 mt-0.5">
+                          DO NOT TRADE • AI ANIMATION CONTENT ONLY
+                        </div>
+                        {settings.authorHandle && (
+                          <div className="text-[9px] font-mono text-cyan-400 font-bold mt-0.5">
+                            @{settings.authorHandle.replace(/^@/, '')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Video Config Summary Card */}
               <div className="p-3 rounded-2xl bg-[#0A0B0D] border border-[#2D3139] space-y-1.5 text-xs">
                 <div className="flex items-center justify-between text-slate-300">
@@ -357,6 +520,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   </span>
                   <span className="font-bold text-slate-200 truncate max-w-[180px]">
                     {audioTrack && !audioTrack.isMuted ? audioTrack.name : 'None (Muted)'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="flex items-center gap-1.5 text-slate-400">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                    Watermark:
+                  </span>
+                  <span className="font-bold text-amber-300">
+                    {settings.showWatermark !== false
+                      ? `Active (${settings.watermarkPosition || 'bottom-left'})`
+                      : 'Disabled'}
                   </span>
                 </div>
               </div>

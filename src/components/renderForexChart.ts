@@ -504,6 +504,119 @@ export function renderForexChartToContext(
     });
   }
 
+  // 8. Draw Financial Disclaimer Watermark Badge at designated angle/corner
+  const showWatermark = exportSettings?.showWatermark !== false;
+  if (showWatermark && (isExporting || exportSettings?.showWatermark)) {
+    ctx.save();
+
+    const titleText = exportSettings?.watermarkText || '⚠️ NOT FINANCIAL ADVICE • DO YOUR OWN RESEARCH (DYOR)';
+    const subText = "DO NOT TRADE • AI ANIMATION CONTENT ONLY";
+    const authorHandle = exportSettings?.authorHandle ? `@${exportSettings.authorHandle.replace(/^@/, '')}` : null;
+    const position = exportSettings?.watermarkPosition || 'bottom-left';
+
+    const titleFontSize = Math.max(9, Math.round(11 * scale));
+    const subFontSize = Math.max(8, Math.round(9.5 * scale));
+    const tagFontSize = Math.max(8, Math.round(9 * scale));
+
+    const fontFam = 'Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    
+    ctx.font = `bold ${titleFontSize}px ${fontFam}`;
+    const titleMetrics = ctx.measureText(titleText);
+    
+    ctx.font = `600 ${subFontSize}px ${fontFam}`;
+    const subMetrics = ctx.measureText(subText);
+
+    let tagMetrics = { width: 0 };
+    if (authorHandle) {
+      ctx.font = `bold ${tagFontSize}px "JetBrains Mono", monospace`;
+      tagMetrics = ctx.measureText(authorHandle);
+    }
+
+    const padX = Math.round(10 * scale);
+    const padY = Math.round(7 * scale);
+    const lineGap = Math.round(3 * scale);
+
+    const maxTextW = Math.max(titleMetrics.width, subMetrics.width, tagMetrics.width);
+    const boxW = maxTextW + padX * 2;
+    const titleH = titleFontSize * 1.2;
+    const subH = subFontSize * 1.2;
+    const tagH = authorHandle ? tagFontSize * 1.2 + lineGap : 0;
+    const boxH = padY * 2 + titleH + subH + lineGap + tagH;
+
+    const marginX = Math.round(14 * scale);
+    const marginY = Math.round(14 * scale);
+
+    let boxX = marginX;
+    let boxY = height - marginY - boxH;
+
+    if (position === 'bottom-right') {
+      boxX = width - marginX - boxW;
+      boxY = height - marginY - boxH;
+    } else if (position === 'top-left') {
+      boxX = marginX;
+      boxY = marginY;
+    } else if (position === 'top-right') {
+      boxX = width - marginX - boxW;
+      boxY = marginY;
+    } else {
+      // bottom-left is default
+      boxX = marginX;
+      boxY = height - marginY - boxH;
+    }
+
+    const radius = Math.round(8 * scale);
+
+    // Draw Glassmorphism Container with subtle amber border
+    ctx.fillStyle = 'rgba(10, 14, 22, 0.88)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2 * scale;
+
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+    } else {
+      ctx.rect(boxX, boxY, boxW, boxH);
+    }
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
+    ctx.lineWidth = Math.max(1, 1.2 * scale);
+    ctx.stroke();
+
+    // Reset shadow for crisp text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    // Draw Title (Amber Warning)
+    const textStartX = boxX + padX;
+    let currentY = boxY + padY + titleH / 2;
+
+    ctx.font = `bold ${titleFontSize}px ${fontFam}`;
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(titleText, textStartX, currentY);
+
+    // Draw Subtitle (Slate 200)
+    currentY += titleH / 2 + lineGap + subH / 2;
+    ctx.font = `600 ${subFontSize}px ${fontFam}`;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(subText, textStartX, currentY);
+
+    // Draw Author Tag if present
+    if (authorHandle) {
+      currentY += subH / 2 + lineGap + tagFontSize * 0.6;
+      ctx.font = `bold ${tagFontSize}px "JetBrains Mono", monospace`;
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText(authorHandle, textStartX, currentY);
+    }
+
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
