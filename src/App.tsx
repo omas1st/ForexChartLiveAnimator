@@ -10,6 +10,7 @@ import {
   AudioTrack
 } from './types';
 import { generateCandlesAlongPath } from './utils/candleGenerator';
+import { convertDrawingToPathPoints } from './utils/drawingConverter';
 import { synchronizedAudioPlayer, playTickSound } from './utils/audio';
 import { Header } from './components/Header';
 import { ChartCanvas } from './components/ChartCanvas';
@@ -19,6 +20,7 @@ import { TextLayersModal } from './components/TextLayersModal';
 import { AudioModal } from './components/AudioModal';
 import { ExportModal } from './components/ExportModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Chart Image State
@@ -36,62 +38,25 @@ export const App: React.FC = () => {
   const [bearishColor, setBearishColor] = useState<string>('#f23645');
 
   // Drawing Path (Waypoints for trajectory)
-  const [pathPoints, setPathPoints] = useState<Point[]>([
-    { x: 0.22, y: 0.72 },
-    { x: 0.44, y: 0.38 },
-    { x: 0.64, y: 0.54 },
-    { x: 0.84, y: 0.22 },
-  ]);
+  const [pathPoints, setPathPoints] = useState<Point[]>([]);
 
   // Generated Candlesticks (guaranteed non-overlapping, uniform equidistant)
-  const [candles, setCandles] = useState<Candle[]>(() => 
-    generateCandlesAlongPath(
-      [
-        { x: 0.22, y: 0.72 },
-        { x: 0.44, y: 0.38 },
-        { x: 0.64, y: 0.54 },
-        { x: 0.84, y: 0.22 },
-      ],
-      22,
-      0.85,
-      1.0
-    )
-  );
+  const [candles, setCandles] = useState<Candle[]>([]);
 
-  // User Drawings & Multiple Rich Text Annotations
+  // User Technical Drawings (shapes with NO candles by default)
   const [userDrawings, setUserDrawings] = useState<UserDrawing[]>([]);
-  const [userTexts, setUserTexts] = useState<UserText[]>([
-    {
-      id: 'text-default-tp',
-      x: 0.76,
-      y: 0.18,
-      text: 'Take Profit (TP) 🎯',
-      fontSize: 18,
-      fontFamily: 'Montserrat, sans-serif',
-      color: '#10b981',
-      fontWeight: 'bold',
-      backgroundColor: 'rgba(6, 78, 59, 0.92)',
-      hasBorder: true,
-      borderColor: '#10b981',
-    },
-    {
-      id: 'text-default-entry',
-      x: 0.22,
-      y: 0.80,
-      text: 'Liquidity Entry ⚡',
-      fontSize: 16,
-      fontFamily: 'Plus Jakarta Sans, sans-serif',
-      color: '#38bdf8',
-      fontWeight: 'bold',
-      backgroundColor: 'rgba(8, 47, 73, 0.92)',
-      hasBorder: true,
-      borderColor: '#06b6d4',
-    }
-  ]);
-  const [selectedTextId, setSelectedTextId] = useState<string | null>('text-default-tp');
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
+  const [drawingColor, setDrawingColor] = useState<string>('#38bdf8');
+
+  // Multiple Rich Text Annotations (clean initial state, no auto text)
+  const [userTexts, setUserTexts] = useState<UserText[]>([]);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
 
   // Active Tool: Default to 'path'
   const [activeTool, setActiveTool] = useState<DrawingToolType>('path');
+
+  // Notification Toast State
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Background Soundtrack & Audio Trimming State
   const [audioTrack, setAudioTrack] = useState<AudioTrack | null>(null);
@@ -299,8 +264,36 @@ export const App: React.FC = () => {
     setActiveTool('text');
   };
 
+  // Technical Drawing Handlers (Drawings without candles & conversion)
+  const handleAddUserDrawing = (d: UserDrawing) => {
+    setUserDrawings((prev) => [...prev, d]);
+    setSelectedDrawingId(d.id);
+  };
+
+  const handleUpdateUserDrawing = (id: string, updated: Partial<UserDrawing>) => {
+    setUserDrawings((prev) => prev.map((d) => (d.id === id ? { ...d, ...updated } : d)));
+  };
+
+  const handleDeleteUserDrawing = (id: string) => {
+    setUserDrawings((prev) => prev.filter((d) => d.id !== id));
+    if (selectedDrawingId === id) {
+      setSelectedDrawingId(null);
+    }
+  };
+
+  const handleConvertDrawingToCandles = (drawing: UserDrawing) => {
+    const points = convertDrawingToPathPoints(drawing);
+    if (points.length >= 2) {
+      setPathPoints(points);
+      setPlayback((prev) => ({ ...prev, currentTime: 0, isPlaying: true }));
+      setToastMessage('Converted drawing to animated candlestick pattern!');
+      setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
+
   const handleClearAll = () => {
     setUserDrawings([]);
+    setSelectedDrawingId(null);
     setUserTexts([]);
     setSelectedTextId(null);
     setPathPoints([]);
@@ -342,6 +335,7 @@ export const App: React.FC = () => {
         >
           <ChartCanvas
             backgroundImage={chartImage}
+            onUploadImage={handleUploadImage}
             pathPoints={pathPoints}
             onUpdatePathPoints={(pts) => {
               setPathPoints(pts);
@@ -350,7 +344,12 @@ export const App: React.FC = () => {
             candles={candles}
             candleSizing={candleSizing}
             userDrawings={userDrawings}
-            onAddUserDrawing={(d) => setUserDrawings((prev) => [...prev, d])}
+            onAddUserDrawing={handleAddUserDrawing}
+            onUpdateUserDrawing={handleUpdateUserDrawing}
+            onDeleteUserDrawing={handleDeleteUserDrawing}
+            selectedDrawingId={selectedDrawingId}
+            onSelectDrawingId={setSelectedDrawingId}
+            onConvertDrawingToCandles={handleConvertDrawingToCandles}
             userTexts={userTexts}
             onAddUserText={handleAddUserText}
             onUpdateUserText={handleUpdateUserText}
@@ -358,6 +357,7 @@ export const App: React.FC = () => {
             selectedTextId={selectedTextId}
             onSelectTextId={setSelectedTextId}
             activeTool={activeTool}
+            drawingColor={drawingColor}
             currentTimeRatio={currentTimeRatio}
             bullishColor={bullishColor}
             bearishColor={bearishColor}
@@ -380,6 +380,17 @@ export const App: React.FC = () => {
               onOpenLayersModal={() => setIsTextLayersModalOpen(true)}
             />
           )}
+
+          {/* Conversion Notification Toast */}
+          {toastMessage && (
+            <div 
+              id="conversion-toast"
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-[#12151E]/95 backdrop-blur-xl border border-cyan-400/80 text-cyan-200 font-bold text-xs sm:text-sm shadow-[0_12px_40px_rgba(6,182,212,0.35)] animate-in fade-in zoom-in-95 flex items-center gap-2 pointer-events-none"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400 fill-amber-400 animate-spin" />
+              <span>{toastMessage}</span>
+            </div>
+          )}
         </div>
       </main>
 
@@ -393,6 +404,8 @@ export const App: React.FC = () => {
         onOpenAudioModal={() => setIsAudioModalOpen(true)}
         activeTool={activeTool}
         onSelectTool={setActiveTool}
+        drawingColor={drawingColor}
+        onSelectDrawingColor={setDrawingColor}
         onResetPath={() => {
           setPathPoints([]);
           setCandles([]);

@@ -28,9 +28,14 @@ export interface CandleSizing {
 }
 
 export type DrawingToolType = 
-  | 'path'  // Straight-line multi-point path: tap to place point, double tap to finish
-  | 'pen'   // Freehand drawing
-  | 'text'; // Text annotation tool
+  | 'path'        // Candlestick Waypoints Path: tap points to generate animated candles
+  | 'freehand'    // Freehand sketch/pattern without candles
+  | 'rectangle'   // Rectangle / order block / zone without candles
+  | 'line'        // Straight trendline / support / resistance without candles
+  | 'arrow-up'    // Upward arrow / bullish breakout without candles
+  | 'arrow-down'  // Downward arrow / bearish breakdown without candles
+  | 'pen'         // Legacy alias for freehand
+  | 'text';       // Text annotation tool
 
 export interface UserText {
   id: string;
@@ -49,10 +54,12 @@ export interface UserText {
 
 export interface UserDrawing {
   id: string;
-  type: 'pen' | 'line' | 'arrow' | 'box';
+  type: 'freehand' | 'rectangle' | 'line' | 'arrow-up' | 'arrow-down' | 'pen' | 'box';
   points: Point[];
   color: string;
   strokeWidth: number;
+  fillColor?: string;
+  label?: string;
 }
 
 export interface AudioTrack {

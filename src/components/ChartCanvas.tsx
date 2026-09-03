@@ -9,16 +9,24 @@ import {
   ExportSettings 
 } from '../types';
 import { renderForexChartToContext, getTextBounds } from './renderForexChart';
-import { Check, RotateCcw } from 'lucide-react';
+import { findHitDrawing } from '../utils/drawingConverter';
+import { FloatingDrawingToolbar } from './FloatingDrawingToolbar';
+import { Check, RotateCcw, Upload, Image as ImageIcon } from 'lucide-react';
 
 interface ChartCanvasProps {
   backgroundImage: HTMLImageElement | null;
+  onUploadImage: (file: File) => void;
   pathPoints: Point[];
   onUpdatePathPoints: (newPoints: Point[]) => void;
   candles: Candle[];
   candleSizing: CandleSizing;
   userDrawings: UserDrawing[];
   onAddUserDrawing: (drawing: UserDrawing) => void;
+  onUpdateUserDrawing?: (id: string, updated: Partial<UserDrawing>) => void;
+  onDeleteUserDrawing?: (id: string) => void;
+  selectedDrawingId?: string | null;
+  onSelectDrawingId?: (id: string | null) => void;
+  onConvertDrawingToCandles: (drawing: UserDrawing) => void;
   userTexts: UserText[];
   onAddUserText: (text: UserText) => void;
   onUpdateUserText: (id: string, updated: Partial<UserText>) => void;
@@ -26,6 +34,8 @@ interface ChartCanvasProps {
   selectedTextId: string | null;
   onSelectTextId: (id: string | null) => void;
   activeTool: DrawingToolType;
+  drawingColor?: string;
+  drawingStrokeWidth?: number;
   currentTimeRatio: number; // 0.0 to 1.0
   exportSettings?: ExportSettings;
   bullishColor: string;
@@ -36,12 +46,18 @@ export { renderForexChartToContext };
 
 export const ChartCanvas: React.FC<ChartCanvasProps> = ({
   backgroundImage,
+  onUploadImage,
   pathPoints,
   onUpdatePathPoints,
   candles,
   candleSizing,
   userDrawings,
   onAddUserDrawing,
+  onUpdateUserDrawing,
+  onDeleteUserDrawing,
+  selectedDrawingId = null,
+  onSelectDrawingId,
+  onConvertDrawingToCandles,
   userTexts,
   onAddUserText,
   onUpdateUserText,
@@ -49,6 +65,8 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
   selectedTextId,
   onSelectTextId,
   activeTool,
+  drawingColor = '#38bdf8',
+  drawingStrokeWidth = 2.5,
   currentTimeRatio,
   exportSettings,
   bullishColor,
@@ -62,14 +80,41 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
   const [cursorPoint, setCursorPoint] = useState<Point | null>(null);
   const lastTapTimeRef = useRef<number>(0);
 
-  // Freehand Pen In-Progress State
+  // Drawing Tools In-Progress State (Shapes without forming candles)
   const [currentDrawingPoints, setCurrentDrawingPoints] = useState<Point[]>([]);
+  const [shapeStartPoint, setShapeStartPoint] = useState<Point | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [activeDrawingPreview, setActiveDrawingPreview] = useState<{
+    type: UserDrawing['type'];
+    points: Point[];
+    color: string;
+    strokeWidth: number;
+    fillColor?: string;
+  } | null>(null);
+  const [hoveredDrawingId, setHoveredDrawingId] = useState<string | null>(null);
 
   // Text Dragging State
   const [draggedTextId, setDraggedTextId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [hoveredTextId, setHoveredTextId] = useState<string | null>(null);
+
+  // Upload & Drag-and-Drop State
+  const centerFileInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [dismissUploadPrompt, setDismissUploadPrompt] = useState(false);
+
+  const selectedDrawing = userDrawings.find((d) => d.id === selectedDrawingId) || null;
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        onUploadImage(file);
+      }
+    }
+  };
 
   // Resize canvas according to container dimensions
   const updateCanvasDimensions = useCallback(() => {
@@ -102,11 +147,13 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
       candles,
       candleSizing,
       userDrawings,
+      selectedDrawingId,
+      activeDrawingPreview,
       userTexts,
       selectedTextId,
       currentTimeRatio,
       exportSettings,
-      livePenPoints: isDrawing && activeTool === 'pen' ? currentDrawingPoints : [],
+      livePenPoints: isDrawing && (activeTool === 'pen' || activeTool === 'freehand') ? currentDrawingPoints : [],
       activePathPoints: activeTool === 'path' ? activePathPoints : [],
       cursorPoint: activeTool === 'path' && activePathPoints.length > 0 ? cursorPoint : null,
       isPathDrawing: activeTool === 'path' && activePathPoints.length > 0,
@@ -119,6 +166,8 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
     candles,
     candleSizing,
     userDrawings,
+    selectedDrawingId,
+    activeDrawingPreview,
     userTexts,
     selectedTextId,
     currentDrawingPoints,
@@ -210,17 +259,32 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
     const isDoubleTap = isDoubleClick || (now - lastTapTimeRef.current < 320);
     lastTapTimeRef.current = now;
 
-    // Check if clicking on existing text
+    // 1. Check if clicking on existing text
     const hitText = findHitText(pt);
-
     if (hitText) {
       onSelectTextId(hitText.id);
+      onSelectDrawingId?.(null);
       setDraggedTextId(hitText.id);
       setDragOffset({ x: pt.x - hitText.x, y: pt.y - hitText.y });
       return;
     }
 
-    // PATH TOOL: Tap to place point, Double-tap to finish path
+    // 2. Check if clicking on existing drawing shape (Selection for conversion or edits)
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const hitDrawing = findHitDrawing(pt, userDrawings, canvas.width, canvas.height);
+      if (hitDrawing) {
+        onSelectDrawingId?.(hitDrawing.id);
+        onSelectTextId(null);
+        return;
+      }
+    }
+
+    // Deselect active selections if clicking open space
+    onSelectDrawingId?.(null);
+    onSelectTextId(null);
+
+    // 3. PATH TOOL: Tap to place point, Double-tap to finish path
     if (activeTool === 'path') {
       if (isDoubleTap && activePathPoints.length >= 1) {
         const finalPoints = [...activePathPoints, pt];
@@ -238,12 +302,74 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
       return;
     }
 
-    // FREEHAND PEN TOOL
-    if (activeTool === 'pen') {
+    // 4. FREEHAND PEN TOOL (Draw without forming candlestick)
+    if (activeTool === 'pen' || activeTool === 'freehand') {
       setIsDrawing(true);
       setCurrentDrawingPoints([pt]);
-    } else if (activeTool === 'text') {
-      // Create new text annotation directly at exact click position!
+      setActiveDrawingPreview({
+        type: 'freehand',
+        points: [pt],
+        color: drawingColor,
+        strokeWidth: drawingStrokeWidth,
+      });
+      return;
+    }
+
+    // 5. RECTANGLE / ZONE TOOL (Draw without forming candlestick)
+    if (activeTool === 'rectangle') {
+      setIsDrawing(true);
+      setShapeStartPoint(pt);
+      setActiveDrawingPreview({
+        type: 'rectangle',
+        points: [pt, pt],
+        color: drawingColor,
+        strokeWidth: drawingStrokeWidth,
+        fillColor: `${drawingColor}25`,
+      });
+      return;
+    }
+
+    // 6. STRAIGHT LINE TOOL (Draw without forming candlestick)
+    if (activeTool === 'line') {
+      setIsDrawing(true);
+      setShapeStartPoint(pt);
+      setActiveDrawingPreview({
+        type: 'line',
+        points: [pt, pt],
+        color: drawingColor,
+        strokeWidth: drawingStrokeWidth,
+      });
+      return;
+    }
+
+    // 7. UP ARROW (BULLISH)
+    if (activeTool === 'arrow-up') {
+      setIsDrawing(true);
+      setShapeStartPoint(pt);
+      setActiveDrawingPreview({
+        type: 'arrow-up',
+        points: [pt, pt],
+        color: drawingColor || '#10b981',
+        strokeWidth: drawingStrokeWidth,
+      });
+      return;
+    }
+
+    // 8. DOWN ARROW (BEARISH)
+    if (activeTool === 'arrow-down') {
+      setIsDrawing(true);
+      setShapeStartPoint(pt);
+      setActiveDrawingPreview({
+        type: 'arrow-down',
+        points: [pt, pt],
+        color: drawingColor || '#f23645',
+        strokeWidth: drawingStrokeWidth,
+      });
+      return;
+    }
+
+    // 9. TEXT ANNOTATION TOOL
+    if (activeTool === 'text') {
       const newText: UserText = {
         id: `text-${Date.now()}`,
         x: Math.max(0.01, Math.min(0.99, pt.x)),
@@ -259,18 +385,22 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
       };
       onAddUserText(newText);
       onSelectTextId(newText.id);
-    } else {
-      // Deselect text if clicking blank area
-      onSelectTextId(null);
+      return;
     }
   };
 
   const handlePointerMove = (clientX: number, clientY: number) => {
     const pt = getNormalizedCoords(clientX, clientY);
 
-    // Update hovered text state for cursor styling
-    const hit = findHitText(pt);
-    setHoveredTextId(hit ? hit.id : null);
+    // Update hovered states for cursor styling
+    const hitText = findHitText(pt);
+    setHoveredTextId(hitText ? hitText.id : null);
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const hitDrawing = findHitDrawing(pt, userDrawings, canvas.width, canvas.height);
+      setHoveredDrawingId(hitDrawing ? hitDrawing.id : null);
+    }
 
     if (draggedTextId) {
       onUpdateUserText(draggedTextId, {
@@ -284,14 +414,50 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
       setCursorPoint(pt);
     }
 
-    if (isDrawing && activeTool === 'pen') {
-      setCurrentDrawingPoints((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && Math.abs(last.x - pt.x) < 0.001 && Math.abs(last.y - pt.y) < 0.001) {
-          return prev;
+    if (isDrawing) {
+      if (activeTool === 'pen' || activeTool === 'freehand') {
+        setCurrentDrawingPoints((prev) => {
+          const next = [...prev, pt];
+          setActiveDrawingPreview({
+            type: 'freehand',
+            points: next,
+            color: drawingColor,
+            strokeWidth: drawingStrokeWidth,
+          });
+          return next;
+        });
+      } else if (shapeStartPoint) {
+        if (activeTool === 'rectangle') {
+          setActiveDrawingPreview({
+            type: 'rectangle',
+            points: [shapeStartPoint, pt],
+            color: drawingColor,
+            strokeWidth: drawingStrokeWidth,
+            fillColor: `${drawingColor}25`,
+          });
+        } else if (activeTool === 'line') {
+          setActiveDrawingPreview({
+            type: 'line',
+            points: [shapeStartPoint, pt],
+            color: drawingColor,
+            strokeWidth: drawingStrokeWidth,
+          });
+        } else if (activeTool === 'arrow-up') {
+          setActiveDrawingPreview({
+            type: 'arrow-up',
+            points: [shapeStartPoint, pt],
+            color: drawingColor || '#10b981',
+            strokeWidth: drawingStrokeWidth,
+          });
+        } else if (activeTool === 'arrow-down') {
+          setActiveDrawingPreview({
+            type: 'arrow-down',
+            points: [shapeStartPoint, pt],
+            color: drawingColor || '#f23645',
+            strokeWidth: drawingStrokeWidth,
+          });
         }
-        return [...prev, pt];
-      });
+      }
     }
   };
 
@@ -300,12 +466,56 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
       setDraggedTextId(null);
     }
 
-    if (isDrawing && activeTool === 'pen') {
+    if (isDrawing) {
       setIsDrawing(false);
-      if (currentDrawingPoints.length > 1) {
-        onUpdatePathPoints(currentDrawingPoints);
+
+      if (activeTool === 'pen' || activeTool === 'freehand') {
+        if (currentDrawingPoints.length > 1) {
+          const newDrawing: UserDrawing = {
+            id: `draw-${Date.now()}`,
+            type: 'freehand',
+            points: currentDrawingPoints,
+            color: drawingColor,
+            strokeWidth: drawingStrokeWidth,
+          };
+          onAddUserDrawing(newDrawing);
+          onSelectDrawingId?.(newDrawing.id);
+        }
+        setCurrentDrawingPoints([]);
+      } else if (shapeStartPoint && activeDrawingPreview) {
+        const p0 = shapeStartPoint;
+        const p1 = activeDrawingPreview.points[1] || p0;
+        const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+
+        let finalP1 = p1;
+        if (dist < 0.01) {
+          // If clicked or tapped without drag, provide a clean default shape
+          if (activeTool === 'rectangle') {
+            finalP1 = { x: Math.min(0.98, p0.x + 0.15), y: Math.min(0.98, p0.y + 0.1) };
+          } else if (activeTool === 'line') {
+            finalP1 = { x: Math.min(0.98, p0.x + 0.18), y: Math.max(0.02, p0.y - 0.08) };
+          } else if (activeTool === 'arrow-up') {
+            finalP1 = { x: p0.x, y: Math.max(0.02, p0.y - 0.14) };
+          } else if (activeTool === 'arrow-down') {
+            finalP1 = { x: p0.x, y: Math.min(0.98, p0.y + 0.14) };
+          }
+        }
+
+        const newDrawing: UserDrawing = {
+          id: `draw-${Date.now()}`,
+          type: activeTool as UserDrawing['type'],
+          points: [p0, finalP1],
+          color: activeDrawingPreview.color,
+          strokeWidth: activeDrawingPreview.strokeWidth,
+          fillColor: activeDrawingPreview.fillColor,
+        };
+
+        onAddUserDrawing(newDrawing);
+        onSelectDrawingId?.(newDrawing.id);
       }
-      setCurrentDrawingPoints([]);
+
+      setShapeStartPoint(null);
+      setActiveDrawingPreview(null);
     }
   };
 
@@ -325,7 +535,9 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
     ? 'cursor-grabbing'
     : hoveredTextId
     ? 'cursor-grab'
-    : activeTool === 'path' || activeTool === 'pen'
+    : hoveredDrawingId
+    ? 'cursor-pointer'
+    : ['path', 'freehand', 'rectangle', 'line', 'arrow-up', 'arrow-down', 'pen'].includes(activeTool)
     ? 'cursor-crosshair'
     : activeTool === 'text'
     ? 'cursor-text'
@@ -335,8 +547,33 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
     <div
       ref={containerRef}
       id="chart-canvas-wrapper"
-      className="relative w-full h-full min-h-[420px] sm:min-h-[520px] bg-[#0A0B0D] rounded-3xl overflow-hidden border border-[#2D3139] shadow-2xl flex items-center justify-center select-none"
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDraggingOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) {
+          setIsDraggingOver(false);
+        }
+      }}
+      onDrop={handleFileDrop}
+      className={`relative w-full h-full min-h-[420px] sm:min-h-[520px] bg-[#0A0B0D] rounded-3xl overflow-hidden border border-[#2D3139] shadow-2xl flex items-center justify-center select-none ${
+        isDraggingOver ? 'ring-2 ring-cyan-400/80 ring-inset' : ''
+      }`}
     >
+      {/* Hidden file input for Center & Floating Upload buttons */}
+      <input
+        ref={centerFileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/jpg"
+        onChange={(e) => {
+          if (e.target.files && e.target.files[0]) {
+            onUploadImage(e.target.files[0]);
+          }
+        }}
+        className="hidden"
+      />
+
       <canvas
         ref={canvasRef}
         id="forex-chart-canvas"
@@ -358,6 +595,71 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
         onTouchEnd={handlePointerUp}
         className={`w-full h-full block touch-none ${cursorClass}`}
       />
+
+      {/* Center of Screen: Upload Chart First Card & Prominent Button */}
+      {!backgroundImage && !dismissUploadPrompt && (
+        <div 
+          id="center-chart-upload-card"
+          className="absolute inset-0 z-20 flex items-center justify-center p-4 pointer-events-auto bg-[#0A0B0D]/60 backdrop-blur-xs"
+        >
+          <div className="relative w-full max-w-sm sm:max-w-md p-6 sm:p-8 rounded-3xl bg-[#12151C]/95 backdrop-blur-2xl border-2 border-[#2D3340] hover:border-cyan-500/50 shadow-[0_20px_60px_rgba(0,0,0,0.8)] text-center flex flex-col items-center gap-4 transition-all animate-in fade-in zoom-in-95">
+            {/* Glow badge icon */}
+            <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-[0_0_25px_rgba(6,182,212,0.3)] shrink-0">
+              <Upload className="w-8 h-8 stroke-[2.2]" />
+            </div>
+
+            {/* Title & Explanatory Copy */}
+            <div className="space-y-1.5 max-w-xs sm:max-w-sm">
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Upload Your Chart First
+              </h2>
+              <p className="text-xs sm:text-[13px] text-slate-300 leading-relaxed">
+                Upload your screenshot from TradingView, MT4/MT5, or your broker before drawing path or text.
+              </p>
+            </div>
+
+            {/* Prominent Center Upload Button */}
+            <button
+              id="center-upload-chart-btn"
+              type="button"
+              onClick={() => centerFileInputRef.current?.click()}
+              className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all cursor-pointer"
+            >
+              <Upload className="w-4 h-4 stroke-[2.8]" />
+              <span>Upload Chart Screenshot</span>
+            </button>
+
+            {/* Format advice and bypass option */}
+            <div className="flex flex-col items-center gap-2 pt-0.5">
+              <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
+                PNG, JPG, WebP · Drag & drop supported
+              </span>
+              <button
+                type="button"
+                onClick={() => setDismissUploadPrompt(true)}
+                className="text-[11px] text-slate-500 hover:text-cyan-300 underline underline-offset-4 transition-colors"
+              >
+                or start drawing directly on dark grid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Change Chart Button when chart is already uploaded */}
+      {backgroundImage && (
+        <button
+          id="replace-chart-floating-btn"
+          type="button"
+          onClick={() => centerFileInputRef.current?.click()}
+          title="Change or replace chart screenshot"
+          className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#12141A]/90 hover:bg-[#1A1D24] active:scale-95 border border-[#2D3139] text-slate-300 hover:text-white text-xs font-semibold shadow-lg backdrop-blur-md transition-all"
+        >
+          <Upload className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="hidden sm:inline">Change Chart</span>
+          <span className="sm:hidden">Change</span>
+        </button>
+      )}
 
       {/* Path Tool Active Status & Actions Banner */}
       {activeTool === 'path' && (
@@ -395,11 +697,33 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
         </div>
       )}
 
-      {/* Floating Freehand Pen Instructions Banner */}
-      {activeTool === 'pen' && (
-        <div className="absolute top-2 sm:top-3 left-1/2 -translate-x-1/2 px-3 sm:px-4 py-1.5 rounded-full bg-cyan-500/20 backdrop-blur-md border border-cyan-500/40 text-[11px] sm:text-xs font-semibold text-cyan-300 pointer-events-none shadow-lg flex items-center gap-1.5 sm:gap-2 max-w-[90%] truncate">
+      {/* Floating Drawing Toolbar for Selected Technical Drawing */}
+      {selectedDrawing && (
+        <FloatingDrawingToolbar
+          selectedDrawing={selectedDrawing}
+          onConvert={(drawing) => onConvertDrawingToCandles(drawing)}
+          onUpdateColor={(id, color) => {
+            onUpdateUserDrawing?.(id, { color, fillColor: `${color}25` });
+          }}
+          onDelete={(id) => {
+            onDeleteUserDrawing?.(id);
+            onSelectDrawingId?.(null);
+          }}
+          onClose={() => onSelectDrawingId?.(null)}
+        />
+      )}
+
+      {/* Floating Technical Drawing Mode Instructions Banner (When not currently selecting a shape) */}
+      {['freehand', 'pen', 'rectangle', 'line', 'arrow-up', 'arrow-down'].includes(activeTool) && !selectedDrawing && (
+        <div className="absolute top-2 sm:top-3 left-1/2 -translate-x-1/2 px-3.5 sm:px-4 py-1.5 rounded-full bg-[#12141A]/95 backdrop-blur-md border border-cyan-500/50 text-[11px] sm:text-xs font-semibold text-cyan-300 shadow-xl flex items-center gap-2 max-w-[92%] truncate pointer-events-none z-10">
           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
-          <span className="truncate">Draw freehand to define trajectory</span>
+          <span className="truncate">
+            {(activeTool === 'freehand' || activeTool === 'pen') && 'Draw freehand shape (No candles · Tap shape to convert)'}
+            {activeTool === 'rectangle' && 'Drag to draw zone / box (Tap shape to convert to candles)'}
+            {activeTool === 'line' && 'Drag to draw straight line (Tap shape to convert to candles)'}
+            {activeTool === 'arrow-up' && 'Drag or tap to place up arrow (Tap shape to convert to candles)'}
+            {activeTool === 'arrow-down' && 'Drag or tap to place down arrow (Tap shape to convert to candles)'}
+          </span>
         </div>
       )}
 
@@ -411,11 +735,11 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
         </div>
       )}
 
-      {/* Helpful overlay when no path exists on uploaded chart */}
-      {pathPoints.length < 2 && activePathPoints.length === 0 && (
+      {/* Helpful overlay when no path exists on uploaded chart or after dismissing prompt */}
+      {(backgroundImage || dismissUploadPrompt) && pathPoints.length < 2 && activePathPoints.length === 0 && (
         <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-2xl bg-[#12141A]/95 backdrop-blur-md border border-[#2D3139] text-[11px] sm:text-xs text-slate-300 shadow-2xl flex items-center gap-2 pointer-events-none max-w-[90%] text-center">
           <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-          <span>Tap on chart with <strong>Path Tool</strong> to generate live animated candles</span>
+          <span>Draw with <strong>Path Tool</strong> or <strong>Drawing Tools</strong> (Tap any drawing to convert to candles)</span>
         </div>
       )}
     </div>

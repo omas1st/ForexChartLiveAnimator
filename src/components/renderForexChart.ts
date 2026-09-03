@@ -163,10 +163,18 @@ export function renderForexChartToContext(
     userDrawings: UserDrawing[];
     userTexts: UserText[];
     selectedTextId?: string | null;
+    selectedDrawingId?: string | null;
     currentTimeRatio: number;
     exportSettings?: ExportSettings;
     isExporting?: boolean;
     livePenPoints?: Point[];
+    activeDrawingPreview?: {
+      type: UserDrawing['type'];
+      points: Point[];
+      color: string;
+      strokeWidth: number;
+      fillColor?: string;
+    } | null;
     activePathPoints?: Point[]; // Points in progress from Path Tool
     cursorPoint?: Point | null; // Current mouse position for straight line preview
     isPathDrawing?: boolean;
@@ -182,10 +190,12 @@ export function renderForexChartToContext(
     userDrawings = [],
     userTexts = [],
     selectedTextId = null,
+    selectedDrawingId = null,
     currentTimeRatio,
     exportSettings,
     isExporting = false,
     livePenPoints = [],
+    activeDrawingPreview = null,
     activePathPoints = [],
     cursorPoint = null,
     isPathDrawing = false,
@@ -259,24 +269,157 @@ export function renderForexChartToContext(
     }
   }
 
-  // 3. Draw Saved User Freehand Drawings
-  if (userDrawings && userDrawings.length > 0) {
-    userDrawings.forEach((d) => {
+  // Helper function to render a technical shape (freehand, rectangle, line, arrow)
+  const renderShape = (
+    d: {
+      type: UserDrawing['type'];
+      points: Point[];
+      color: string;
+      strokeWidth: number;
+      fillColor?: string;
+    },
+    isSelected: boolean = false
+  ) => {
+    if (!d.points || d.points.length === 0) return;
+    const color = d.color || '#38bdf8';
+    const strokeW = Math.max(1.5, (d.strokeWidth || 2.5) * scale);
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = strokeW;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (d.type === 'rectangle' || d.type === 'box') {
+      if (d.points.length >= 2) {
+        const x0 = toPixelX(d.points[0].x);
+        const y0 = toPixelY(d.points[0].y);
+        const x1 = toPixelX(d.points[1].x);
+        const y1 = toPixelY(d.points[1].y);
+        const rx = Math.min(x0, x1);
+        const ry = Math.min(y0, y1);
+        const rw = Math.max(2, Math.abs(x1 - x0));
+        const rh = Math.max(2, Math.abs(y1 - y0));
+
+        // Semi-transparent zone fill
+        ctx.fillStyle = d.fillColor || `${color}25`;
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeRect(rx, ry, rw, rh);
+      }
+    } else if (
+      d.type === 'arrow-up' ||
+      d.type === 'arrow-down'
+    ) {
+      if (d.points.length >= 2) {
+        const x0 = toPixelX(d.points[0].x);
+        const y0 = toPixelY(d.points[0].y);
+        const x1 = toPixelX(d.points[1].x);
+        const y1 = toPixelY(d.points[1].y);
+
+        // Arrow shaft
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+
+        // Arrow head at target point
+        const angle = Math.atan2(y1 - y0, x1 - x0);
+        const headLen = Math.max(12, 16 * scale);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(
+          x1 - headLen * Math.cos(angle - Math.PI / 6),
+          y1 - headLen * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          x1 - headLen * Math.cos(angle + Math.PI / 6),
+          y1 - headLen * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+    } else if (d.type === 'line') {
+      if (d.points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(toPixelX(d.points[0].x), toPixelY(d.points[0].y));
+        ctx.lineTo(toPixelX(d.points[1].x), toPixelY(d.points[1].y));
+        ctx.stroke();
+
+        // Small endpoint dots
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(toPixelX(d.points[0].x), toPixelY(d.points[0].y), 3 * scale, 0, Math.PI * 2);
+        ctx.arc(toPixelX(d.points[1].x), toPixelY(d.points[1].y), 3 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // Freehand / pen polyline
       if (d.points.length > 1) {
-        ctx.save();
-        ctx.strokeStyle = d.color || '#38bdf8';
-        ctx.lineWidth = Math.max(1.5, (d.strokeWidth || 2.5) * scale);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
         ctx.beginPath();
         ctx.moveTo(toPixelX(d.points[0].x), toPixelY(d.points[0].y));
         for (let i = 1; i < d.points.length; i++) {
           ctx.lineTo(toPixelX(d.points[i].x), toPixelY(d.points[i].y));
         }
         ctx.stroke();
+      }
+    }
+
+    // Draw Selected Highlight Box
+    if (isSelected && d.points.length > 0) {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      d.points.forEach((pt) => {
+        const px = toPixelX(pt.x);
+        const py = toPixelY(pt.y);
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+      });
+
+      if (minX !== Infinity) {
+        const pad = Math.round(8 * scale);
+        ctx.save();
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 1.5 * scale;
+        ctx.setLineDash([5 * scale, 4 * scale]);
+        ctx.strokeRect(
+          minX - pad,
+          minY - pad,
+          maxX - minX + pad * 2,
+          maxY - minY + pad * 2
+        );
+        ctx.setLineDash([]);
+
+        // Small corner nodes
+        const nodeSize = 6 * scale;
+        ctx.fillStyle = '#06b6d4';
+        ctx.fillRect(minX - pad - nodeSize / 2, minY - pad - nodeSize / 2, nodeSize, nodeSize);
+        ctx.fillRect(maxX + pad - nodeSize / 2, minY - pad - nodeSize / 2, nodeSize, nodeSize);
+        ctx.fillRect(minX - pad - nodeSize / 2, maxY + pad - nodeSize / 2, nodeSize, nodeSize);
+        ctx.fillRect(maxX + pad - nodeSize / 2, maxY + pad - nodeSize / 2, nodeSize, nodeSize);
+
         ctx.restore();
       }
+    }
+
+    ctx.restore();
+  };
+
+  // 3. Draw Saved User Drawings (Freehand, Rectangle, Line, Arrows)
+  if (userDrawings && userDrawings.length > 0) {
+    userDrawings.forEach((d) => {
+      renderShape(d, selectedDrawingId === d.id);
     });
+  }
+
+  // 3b. Draw Active Shape Preview while user is actively drawing
+  if (activeDrawingPreview && activeDrawingPreview.points.length > 0) {
+    renderShape(activeDrawingPreview, false);
   }
 
   // 4. Draw Active Path Tool In-Progress Waypoints & Straight Guide Segments

@@ -5,13 +5,16 @@ import {
   RotateCcw, 
   Waypoints, 
   PenTool, 
+  Square,
+  Minus,
+  ArrowUpRight,
+  ArrowDownRight,
   Type, 
   Sliders, 
   Music, 
   Clock, 
   ChevronDown, 
   Plus, 
-  Minus, 
   MoveHorizontal, 
   Maximize2, 
   BarChart2, 
@@ -20,7 +23,9 @@ import {
   VolumeX,
   Sparkles,
   Layers,
-  Trash2
+  Trash2,
+  Palette,
+  Check
 } from 'lucide-react';
 import { 
   DrawingToolType, 
@@ -41,6 +46,8 @@ interface AppBottomDockProps {
   // Drawing & Tool Props
   activeTool: DrawingToolType;
   onSelectTool: (tool: DrawingToolType) => void;
+  drawingColor?: string;
+  onSelectDrawingColor?: (color: string) => void;
   onResetPath: () => void;
   candleSizing: CandleSizing;
   onUpdateCandleSizing: (sizing: Partial<CandleSizing>) => void;
@@ -60,6 +67,53 @@ const DURATION_PRESETS = [
   { label: '120s (2m)', value: 120 },
 ];
 
+const DRAWING_TOOL_OPTIONS = [
+  {
+    id: 'freehand' as DrawingToolType,
+    name: 'Freehand',
+    badge: 'Pen',
+    icon: <PenTool className="w-4 h-4 text-cyan-400" />,
+    desc: 'Fluid curves, waves, and patterns without candles',
+  },
+  {
+    id: 'rectangle' as DrawingToolType,
+    name: 'Rectangle',
+    badge: 'Box',
+    icon: <Square className="w-4 h-4 text-amber-400" />,
+    desc: 'Order blocks, zones, and liquidity boxes',
+  },
+  {
+    id: 'line' as DrawingToolType,
+    name: 'Straight Line',
+    badge: 'Line',
+    icon: <Minus className="w-4 h-4 text-cyan-300 stroke-[3]" />,
+    desc: 'Trendlines, support, resistance, and key levels',
+  },
+  {
+    id: 'arrow-up' as DrawingToolType,
+    name: 'Up Arrow',
+    badge: '↗ Bullish',
+    icon: <ArrowUpRight className="w-4 h-4 text-emerald-400 stroke-[2.5]" />,
+    desc: 'Bullish breakout, upward target, or markup',
+  },
+  {
+    id: 'arrow-down' as DrawingToolType,
+    name: 'Down Arrow',
+    badge: '↘ Bearish',
+    icon: <ArrowDownRight className="w-4 h-4 text-rose-400 stroke-[2.5]" />,
+    desc: 'Bearish breakdown, downward target, or markdown',
+  },
+];
+
+const DRAWING_PALETTE = [
+  { name: 'Cyan Glow', hex: '#38bdf8' },
+  { name: 'Bullish Green', hex: '#10b981' },
+  { name: 'Bearish Red', hex: '#f43f5e' },
+  { name: 'Amber Gold', hex: '#fbbf24' },
+  { name: 'Purple Neon', hex: '#a855f7' },
+  { name: 'Clean White', hex: '#f8fafc' },
+];
+
 export const AppBottomDock: React.FC<AppBottomDockProps> = ({
   playback,
   onTogglePlay,
@@ -69,6 +123,8 @@ export const AppBottomDock: React.FC<AppBottomDockProps> = ({
   onOpenAudioModal,
   activeTool,
   onSelectTool,
+  drawingColor = '#38bdf8',
+  onSelectDrawingColor,
   onResetPath,
   candleSizing,
   onUpdateCandleSizing,
@@ -80,6 +136,18 @@ export const AppBottomDock: React.FC<AppBottomDockProps> = ({
 }) => {
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [showCandleTuneDrawer, setShowCandleTuneDrawer] = useState(false);
+  const [showDrawingToolsPicker, setShowDrawingToolsPicker] = useState(false);
+
+  const isTechnicalDrawingToolActive = [
+    'freehand',
+    'rectangle',
+    'line',
+    'arrow-up',
+    'arrow-down',
+    'pen',
+  ].includes(activeTool);
+
+  const activeDrawingToolObj = DRAWING_TOOL_OPTIONS.find((t) => t.id === activeTool);
 
   const progressPercent = Math.min(100, Math.max(0, (playback.currentTime / (playback.duration || 10)) * 100));
 
@@ -260,6 +328,98 @@ export const AppBottomDock: React.FC<AppBottomDockProps> = ({
         </div>
       )}
 
+      {/* Drawing Tools Popover Sheet */}
+      {showDrawingToolsPicker && (
+        <div 
+          id="drawing-tools-popup"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:left-24 mb-2 w-[calc(100%-1rem)] max-w-sm p-3.5 sm:p-4 rounded-2xl bg-[#14161E]/98 backdrop-blur-2xl border border-cyan-500/40 shadow-[0_16px_40px_rgba(0,0,0,0.85)] z-40 animate-in fade-in slide-in-from-bottom-3 space-y-3 text-slate-100"
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <PenTool className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                Drawing Tools (No Candles)
+              </span>
+            </div>
+            <button
+              onClick={() => setShowDrawingToolsPicker(false)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400 leading-snug">
+            Draw technical shapes without forming candlesticks. Tap any drawing anytime to transform it into an animated candlestick pattern!
+          </p>
+
+          {/* Tool Options List */}
+          <div className="flex flex-col gap-1.5">
+            {DRAWING_TOOL_OPTIONS.map((tool) => {
+              const isSelected = activeTool === tool.id || (tool.id === 'freehand' && activeTool === 'pen');
+              return (
+                <button
+                  key={tool.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectTool(tool.id);
+                    setShowDrawingToolsPicker(false);
+                  }}
+                  className={`flex items-center gap-2.5 p-2 rounded-xl text-left transition-all ${
+                    isSelected
+                      ? 'bg-cyan-500/20 border border-cyan-500/60 text-cyan-200 shadow-sm'
+                      : 'bg-[#1A1D27] hover:bg-[#232734] border border-slate-800/80 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700/60 shrink-0">
+                    {tool.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-bold">{tool.name}</span>
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-300">
+                        {tool.badge}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">{tool.desc}</div>
+                  </div>
+                  {isSelected && <Check className="w-4 h-4 text-cyan-400 shrink-0 stroke-[3]" />}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Color Palette for Drawings */}
+          {onSelectDrawingColor && (
+            <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                <Palette className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Default Color</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {DRAWING_PALETTE.map((c) => {
+                  const isColorActive = drawingColor.toLowerCase() === c.hex.toLowerCase();
+                  return (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      onClick={() => onSelectDrawingColor(c.hex)}
+                      title={c.name}
+                      className={`w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${
+                        isColorActive ? 'ring-2 ring-white scale-110' : 'opacity-80'
+                      }`}
+                      style={{ backgroundColor: c.hex }}
+                    >
+                      {isColorActive && <Check className="w-3 h-3 text-slate-950 stroke-[3]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main Bottom Dock Bar */}
       <div className="bg-[#12141A]/95 backdrop-blur-xl border-t border-[#232731] px-2.5 sm:px-4 py-2 flex flex-col gap-1.5">
         
@@ -367,19 +527,23 @@ export const AppBottomDock: React.FC<AppBottomDockProps> = ({
             <span className="text-[10px] sm:text-xs">Path Tool</span>
           </button>
 
-          {/* Freehand Pen */}
+          {/* Drawing Tools (Freehand, Rectangle, Straight Line, Arrows - No Candles) */}
           <button
-            id="dock-tool-pen"
+            id="dock-tool-drawing-menu"
             type="button"
-            onClick={() => onSelectTool('pen')}
-            className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1 sm:py-1.5 px-1.5 rounded-xl font-semibold transition-all ${
-              activeTool === 'pen'
+            onClick={() => setShowDrawingToolsPicker(!showDrawingToolsPicker)}
+            title="Drawing Tools (Shapes & Patterns without candles)"
+            className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1 sm:py-1.5 px-1.5 rounded-xl font-semibold transition-all cursor-pointer ${
+              isTechnicalDrawingToolActive || showDrawingToolsPicker
                 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/60 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D24]'
             }`}
           >
-            <PenTool className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400" />
-            <span className="text-[10px] sm:text-xs">Freehand</span>
+            {activeDrawingToolObj ? activeDrawingToolObj.icon : <PenTool className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400" />}
+            <span className="text-[10px] sm:text-xs">
+              {activeDrawingToolObj ? activeDrawingToolObj.name : 'Drawing'}
+            </span>
+            <ChevronDown className="w-2.5 h-2.5 opacity-60 hidden xs:inline" />
           </button>
 
           {/* Add Text Note */}
