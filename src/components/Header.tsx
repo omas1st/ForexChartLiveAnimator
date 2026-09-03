@@ -7,6 +7,7 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   onUploadImage: (file: File) => void;
@@ -149,6 +150,9 @@ export const Header: React.FC<HeaderProps> = ({
           onChange={handleFileChange}
           className="hidden"
         />
+
+        {/* Install App PWA Button */}
+        <PWAInstallButton />
 
         {/* Upload Screenshot Button */}
         <button

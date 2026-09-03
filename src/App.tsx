@@ -18,6 +18,7 @@ import { FloatingTextToolbar } from './components/FloatingTextToolbar';
 import { TextLayersModal } from './components/TextLayersModal';
 import { AudioModal } from './components/AudioModal';
 import { ExportModal } from './components/ExportModal';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 export const App: React.FC = () => {
   // Chart Image State
@@ -441,6 +442,9 @@ export const App: React.FC = () => {
         videoDurationSeconds={playback.duration}
         audioTrack={audioTrack}
       />
+
+      {/* PWA Offline Mode Indicator Toast */}
+      <OfflineIndicator />
     </div>
   );
 };
