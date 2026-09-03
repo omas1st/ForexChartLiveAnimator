@@ -55,6 +55,9 @@ export const App: React.FC = () => {
   // Active Tool: Default to 'path'
   const [activeTool, setActiveTool] = useState<DrawingToolType>('path');
 
+  // Candlestick Path Auto-Adjust (Professional Spacing & Zero Overlap vs Manual Raw)
+  const [autoAdjustPath, setAutoAdjustPath] = useState<boolean>(true);
+
   // Notification Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -86,7 +89,7 @@ export const App: React.FC = () => {
     setPlayback((prev) => ({ ...prev, audioTrack }));
   }, [audioTrack]);
 
-  // Regenerate candlesticks whenever path or sizing changes
+  // Regenerate candlesticks whenever path, sizing, or autoAdjustPath changes
   useEffect(() => {
     if (pathPoints.length < 2) {
       setCandles([]);
@@ -96,10 +99,11 @@ export const App: React.FC = () => {
       pathPoints,
       candleSizing.candleCount,
       candleSizing.heightScale,
-      candleSizing.spacingScale
+      candleSizing.spacingScale,
+      autoAdjustPath
     );
     setCandles(generated);
-  }, [pathPoints, candleSizing.candleCount, candleSizing.heightScale, candleSizing.spacingScale]);
+  }, [pathPoints, candleSizing.candleCount, candleSizing.heightScale, candleSizing.spacingScale, autoAdjustPath]);
 
   // Sync background music with playback state
   useEffect(() => {
@@ -417,6 +421,16 @@ export const App: React.FC = () => {
         onAddTextDirectly={() => handleAddTextDirectly('Order Block (OB)')}
         onDeleteSelectedText={handleDeleteSelectedText}
         onClearAll={handleClearAll}
+        autoAdjustPath={autoAdjustPath}
+        onToggleAutoAdjustPath={(enabled) => {
+          setAutoAdjustPath(enabled);
+          setToastMessage(
+            enabled
+              ? 'Auto-Adjust ON: Institutional Candlestick Spacing'
+              : 'Auto-Adjust OFF: Manual Raw Path Mode'
+          );
+          setTimeout(() => setToastMessage(null), 3500);
+        }}
       />
 
       {/* Text Layers Management Modal */}

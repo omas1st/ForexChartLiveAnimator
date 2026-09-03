@@ -403,6 +403,31 @@ export function renderForexChartToContext(
         ctx.fillRect(minX - pad - nodeSize / 2, maxY + pad - nodeSize / 2, nodeSize, nodeSize);
         ctx.fillRect(maxX + pad - nodeSize / 2, maxY + pad - nodeSize / 2, nodeSize, nodeSize);
 
+        // "Drag to Move" visual indicator badge
+        const badgeText = '✥ Drag to Move';
+        ctx.font = `600 ${Math.max(10, Math.round(11 * scale))}px system-ui, -apple-system, sans-serif`;
+        const textMetrics = ctx.measureText(badgeText);
+        const badgeW = textMetrics.width + 12 * scale;
+        const badgeH = 18 * scale;
+        const badgeX = minX - pad;
+        const badgeY = Math.max(4, minY - pad - badgeH - 3 * scale);
+
+        ctx.fillStyle = 'rgba(10, 14, 23, 0.92)';
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 1 * scale;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4 * scale);
+        } else {
+          ctx.rect(badgeX, badgeY, badgeW, badgeH);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#67e8f9';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(badgeText, badgeX + 6 * scale, badgeY + badgeH / 2);
+
         ctx.restore();
       }
     }

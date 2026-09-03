@@ -62,10 +62,15 @@ export const FloatingDrawingToolbar: React.FC<FloatingDrawingToolbarProps> = ({
       id="floating-drawing-toolbar"
       className="absolute top-3 left-1/2 -translate-x-1/2 z-30 max-w-[96%] sm:max-w-xl w-auto bg-[#12151D]/95 backdrop-blur-2xl border border-cyan-500/50 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.85)] p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2 text-slate-200 animate-in fade-in slide-in-from-top-3 select-none"
     >
-      {/* Shape Type Badge */}
-      <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#1B1E28] border border-slate-700/60 text-xs font-semibold text-slate-200 shrink-0">
-        {icon}
-        <span>{label}</span>
+      {/* Shape Type Badge & Move indicator */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#1B1E28] border border-slate-700/60 text-xs font-semibold text-slate-200">
+          {icon}
+          <span>{label}</span>
+        </div>
+        <span className="text-[11px] text-cyan-300 font-medium hidden sm:inline-flex items-center gap-1 bg-cyan-950/40 px-2 py-0.5 rounded-md border border-cyan-800/40">
+          ✥ Drag to move
+        </span>
       </div>
 
       {/* Primary Action: Convert to Candlestick Pattern */}

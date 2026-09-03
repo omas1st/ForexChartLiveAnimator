@@ -92,6 +92,8 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
     fillColor?: string;
   } | null>(null);
   const [hoveredDrawingId, setHoveredDrawingId] = useState<string | null>(null);
+  const [draggedDrawingId, setDraggedDrawingId] = useState<string | null>(null);
+  const [drawingDragStartPt, setDrawingDragStartPt] = useState<Point | null>(null);
 
   // Text Dragging State
   const [draggedTextId, setDraggedTextId] = useState<string | null>(null);
@@ -269,13 +271,39 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
       return;
     }
 
-    // 2. Check if clicking on existing drawing shape (Selection for conversion or edits)
+    // 2. Check if clicking on existing drawing shape (Selection for conversion, edits, or DRAGGING)
     const canvas = canvasRef.current;
     if (canvas) {
-      const hitDrawing = findHitDrawing(pt, userDrawings, canvas.width, canvas.height);
+      // Check if clicking inside currently selected drawing bounding box (with generous grab margin)
+      let hitDrawing: UserDrawing | null = null;
+      if (selectedDrawing && selectedDrawing.points && selectedDrawing.points.length > 0) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        selectedDrawing.points.forEach((p) => {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        });
+        const grabMargin = 0.04;
+        if (
+          pt.x >= minX - grabMargin &&
+          pt.x <= maxX + grabMargin &&
+          pt.y >= minY - grabMargin &&
+          pt.y <= maxY + grabMargin
+        ) {
+          hitDrawing = selectedDrawing;
+        }
+      }
+
+      if (!hitDrawing) {
+        hitDrawing = findHitDrawing(pt, userDrawings, canvas.width, canvas.height);
+      }
+
       if (hitDrawing) {
         onSelectDrawingId?.(hitDrawing.id);
         onSelectTextId(null);
+        setDraggedDrawingId(hitDrawing.id);
+        setDrawingDragStartPt(pt);
         return;
       }
     }
@@ -410,6 +438,38 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
       return;
     }
 
+    // Drag and move user drawings (Technical drawn items)
+    if (draggedDrawingId && drawingDragStartPt) {
+      const dx = pt.x - drawingDragStartPt.x;
+      const dy = pt.y - drawingDragStartPt.y;
+
+      if (Math.hypot(dx, dy) > 0.0001) {
+        const drawing = userDrawings.find((d) => d.id === draggedDrawingId);
+        if (drawing && drawing.points.length > 0) {
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          drawing.points.forEach((p) => {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+          });
+
+          // Prevent moving completely off screen
+          const clampedDx = Math.max(-minX + 0.005, Math.min(0.995 - maxX, dx));
+          const clampedDy = Math.max(-minY + 0.005, Math.min(0.995 - maxY, dy));
+
+          const updatedPoints = drawing.points.map((p) => ({
+            x: Math.max(0.005, Math.min(0.995, p.x + clampedDx)),
+            y: Math.max(0.005, Math.min(0.995, p.y + clampedDy)),
+          }));
+
+          onUpdateUserDrawing?.(draggedDrawingId, { points: updatedPoints });
+          setDrawingDragStartPt(pt);
+        }
+      }
+      return;
+    }
+
     if (activeTool === 'path' && activePathPoints.length > 0) {
       setCursorPoint(pt);
     }
@@ -464,6 +524,10 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
   const handlePointerUp = () => {
     if (draggedTextId) {
       setDraggedTextId(null);
+    }
+    if (draggedDrawingId) {
+      setDraggedDrawingId(null);
+      setDrawingDragStartPt(null);
     }
 
     if (isDrawing) {
@@ -531,12 +595,12 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
     }
   };
 
-  const cursorClass = draggedTextId
+  const cursorClass = draggedTextId || draggedDrawingId
     ? 'cursor-grabbing'
     : hoveredTextId
     ? 'cursor-grab'
     : hoveredDrawingId
-    ? 'cursor-pointer'
+    ? 'cursor-grab'
     : ['path', 'freehand', 'rectangle', 'line', 'arrow-up', 'arrow-down', 'pen'].includes(activeTool)
     ? 'cursor-crosshair'
     : activeTool === 'text'

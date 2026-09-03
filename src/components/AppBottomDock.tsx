@@ -56,6 +56,10 @@ interface AppBottomDockProps {
   onAddTextDirectly: () => void;
   onDeleteSelectedText: () => void;
   onClearAll: () => void;
+
+  // Path Auto-Adjust Toggle props
+  autoAdjustPath?: boolean;
+  onToggleAutoAdjustPath?: (enabled: boolean) => void;
 }
 
 const DURATION_PRESETS = [
@@ -133,10 +137,13 @@ export const AppBottomDock: React.FC<AppBottomDockProps> = ({
   onAddTextDirectly,
   onDeleteSelectedText,
   onClearAll,
+  autoAdjustPath = true,
+  onToggleAutoAdjustPath,
 }) => {
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [showCandleTuneDrawer, setShowCandleTuneDrawer] = useState(false);
   const [showDrawingToolsPicker, setShowDrawingToolsPicker] = useState(false);
+  const [showPathAdjustMenu, setShowPathAdjustMenu] = useState(false);
 
   const isTechnicalDrawingToolActive = [
     'freehand',
@@ -420,6 +427,117 @@ export const AppBottomDock: React.FC<AppBottomDockProps> = ({
         </div>
       )}
 
+      {/* Candlestick Path Spacing & Auto-Adjust Drawer Popup */}
+      {showPathAdjustMenu && (
+        <div 
+          id="dock-path-adjust-menu"
+          className="absolute bottom-16 left-2 sm:left-4 z-40 w-[94vw] max-w-sm bg-[#12151E]/95 backdrop-blur-2xl border border-cyan-500/50 rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.85)] p-3 sm:p-3.5 flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 select-none"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-[13px] font-bold text-white flex items-center gap-1.5">
+                  <span>Candlestick Auto-Adjust</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                    autoAdjustPath 
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' 
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  }`}>
+                    {autoAdjustPath ? 'AUTO ON' : 'MANUAL RAW'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {autoAdjustPath 
+                    ? 'Uniform time spacing, zero candle overlaps, smooth swings' 
+                    : 'Exact drawn coordinates without auto-alignment'}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPathAdjustMenu(false)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Option 1: Professional Auto-Adjust */}
+          <button
+            type="button"
+            id="btn-enable-auto-adjust"
+            onClick={() => {
+              onToggleAutoAdjustPath?.(true);
+              setShowPathAdjustMenu(false);
+            }}
+            className={`p-2.5 rounded-xl text-left border transition-all flex items-start gap-2.5 cursor-pointer ${
+              autoAdjustPath
+                ? 'bg-cyan-500/20 border-cyan-500/70 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                : 'bg-[#181B26] border-slate-800/80 text-slate-400 hover:bg-[#202433] hover:text-slate-200'
+            }`}
+          >
+            <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${autoAdjustPath ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'}`}>
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">Auto-Adjust Path (Professional)</span>
+                {autoAdjustPath && <Check className="w-3.5 h-3.5 text-cyan-400 stroke-[3]" />}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                Institutional spacing. Automatically equalizes candle distance, eliminates horizontal overlap, and smooths price curves like authentic financial charts.
+              </p>
+            </div>
+          </button>
+
+          {/* Option 2: Remove from Auto-Adjust (Manual Raw Mode) */}
+          <button
+            type="button"
+            id="btn-remove-auto-adjust"
+            onClick={() => {
+              onToggleAutoAdjustPath?.(false);
+              setShowPathAdjustMenu(false);
+            }}
+            className={`p-2.5 rounded-xl text-left border transition-all flex items-start gap-2.5 cursor-pointer ${
+              !autoAdjustPath
+                ? 'bg-amber-500/20 border-amber-500/70 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                : 'bg-[#181B26] border-slate-800/80 text-slate-400 hover:bg-[#202433] hover:text-slate-200'
+            }`}
+          >
+            <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${!autoAdjustPath ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'}`}>
+              <Minus className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">Remove Path from Auto (Manual Raw)</span>
+                {!autoAdjustPath && <Check className="w-3.5 h-3.5 text-amber-400 stroke-[3]" />}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                Removes auto-adjust. Candles strictly follow your raw cursor or finger waypoints without automatic equalized spacing.
+              </p>
+            </div>
+          </button>
+
+          {/* Quick Toggle Helper Bar */}
+          <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/80">
+            <span>Current: <strong className="text-slate-200">{autoAdjustPath ? 'Professional Auto' : 'Manual Raw'}</strong></span>
+            <button
+              type="button"
+              onClick={() => {
+                onToggleAutoAdjustPath?.(!autoAdjustPath);
+              }}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold transition-colors cursor-pointer"
+            >
+              {autoAdjustPath ? 'Remove from Auto' : 'Add Back to Auto'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Bottom Dock Bar */}
       <div className="bg-[#12141A]/95 backdrop-blur-xl border-t border-[#232731] px-2.5 sm:px-4 py-2 flex flex-col gap-1.5">
         
@@ -512,20 +630,48 @@ export const AppBottomDock: React.FC<AppBottomDockProps> = ({
         {/* Row 2: Native Mobile App Tools Dock */}
         <div className="flex items-center justify-between gap-1 sm:gap-2 pt-1 border-t border-[#232731]/80">
           
-          {/* Path Tool (Primary Waypoint Engine) */}
-          <button
-            id="dock-tool-path"
-            type="button"
-            onClick={() => onSelectTool('path')}
-            className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1 sm:py-1.5 px-1.5 rounded-xl font-semibold transition-all ${
-              activeTool === 'path'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/60 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D24]'
-            }`}
-          >
-            <Waypoints className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400" />
-            <span className="text-[10px] sm:text-xs">Path Tool</span>
-          </button>
+          {/* Path Tool (Primary Waypoint Engine) + Dropdown Toggle for Auto-Adjust */}
+          <div className="flex-1 flex items-stretch rounded-xl border border-transparent">
+            <button
+              id="dock-tool-path"
+              type="button"
+              onClick={() => onSelectTool('path')}
+              className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 py-1 sm:py-1.5 px-1 rounded-l-xl font-semibold transition-all ${
+                activeTool === 'path'
+                  ? 'bg-cyan-500/20 text-cyan-300 border-y border-l border-cyan-500/60 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D24]'
+              }`}
+            >
+              <Waypoints className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-[10px] sm:text-xs">Path</span>
+              {autoAdjustPath && (
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse hidden sm:inline-block" title="Auto-Adjust Active" />
+              )}
+            </button>
+
+            {/* Small dropdown feature at the side of Path Tool */}
+            <button
+              id="dock-path-dropdown-btn"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPathAdjustMenu(!showPathAdjustMenu);
+                setShowDrawingToolsPicker(false);
+                setShowCandleTuneDrawer(false);
+                setShowDurationPicker(false);
+              }}
+              title="Path Candlestick Spacing: Add or Remove Auto-Adjust"
+              className={`px-1 sm:px-1.5 flex items-center justify-center rounded-r-xl border-l border-slate-800 transition-colors cursor-pointer ${
+                showPathAdjustMenu
+                  ? 'bg-cyan-500/30 text-cyan-200 border-y border-r border-cyan-500/60'
+                  : activeTool === 'path'
+                  ? 'bg-cyan-500/20 text-cyan-400 border-y border-r border-cyan-500/60 hover:bg-cyan-500/30'
+                  : 'bg-[#181B24] text-slate-400 hover:text-slate-200 hover:bg-[#202430]'
+              }`}
+            >
+              <ChevronDown className={`w-3 h-3 transition-transform ${showPathAdjustMenu ? 'rotate-180 text-cyan-300' : ''}`} />
+            </button>
+          </div>
 
           {/* Drawing Tools (Freehand, Rectangle, Straight Line, Arrows - No Candles) */}
           <button

@@ -85,15 +85,69 @@ export function getPointAtArcLengthFraction(
 }
 
 /**
+ * Samples a point along the path trajectory at arc distance `dist`.
+ * - For dist <= 0: returns exact start point (points[0]).
+ * - For dist in [0, totalLength]: returns exact point along the drawn path.
+ * - For dist > totalLength: smoothly extrapolates along the exit direction vector of the
+ *   final segment to prevent overlay when candles have reached minimum width.
+ */
+export function getTrajectoryPointAtDistance(
+  points: Point[],
+  dist: number,
+  arcData: { totalLength: number; cumulativeDistances: number[] }
+): Point {
+  if (!points || points.length === 0) {
+    return { x: 0.5, y: 0.5 };
+  }
+  if (points.length === 1) {
+    return points[0];
+  }
+
+  const L = arcData.totalLength;
+  if (dist <= 0.00001) {
+    return { x: points[0].x, y: points[0].y };
+  }
+
+  if (dist <= L) {
+    const fraction = Math.max(0, Math.min(1, dist / L));
+    return getPointAtArcLengthFraction(points, fraction, arcData);
+  }
+
+  // Beyond path stop (overflow expansion to prevent overlay on very short paths)
+  const lastIdx = points.length - 1;
+  const pEnd = points[lastIdx];
+  const pPrev = points[Math.max(0, lastIdx - 1)];
+  const dx = pEnd.x - pPrev.x;
+  const dy = pEnd.y - pPrev.y;
+  const segLen = Math.hypot(dx, dy);
+
+  if (segLen <= 0.0001) {
+    return { x: pEnd.x, y: pEnd.y };
+  }
+
+  const excess = dist - L;
+  return {
+    x: Math.max(0.001, Math.min(0.999, pEnd.x + (dx / segLen) * excess)),
+    y: Math.max(0.001, Math.min(0.999, pEnd.y + (dy / segLen) * excess)),
+  };
+}
+
+/**
  * Generate authentic financial candlesticks along the drawn trajectory.
- * Guarantees that the first candle starts EXACTLY at the user's initial waypoint (pathPoints[0]),
- * and all candles strictly follow the drawn path coordinates with no auto-displacement.
+ * 
+ * - Strictly follows the user's drawn path trajectory from start to stop.
+ * - Starts at the point where the path starts, and stops where the path stops.
+ * - Auto-adjusts candle spacing, width, and height to fit seamlessly.
+ * - Only expands beyond the path stop when the candles have reached their lowest width/height
+ *   and cannot fit inside the drawn path without overlaying.
+ * - Clamps final candle wicks so they never overshoot or float above the destination.
  */
 export function generateCandlesAlongPath(
   pathPoints: Point[],
   candleCount: number = 22,
   heightScale: number = 0.85,
-  spacingScale: number = 1.0
+  spacingScale: number = 1.0,
+  autoAdjust: boolean = true
 ): Candle[] {
   if (!pathPoints || pathPoints.length < 2) {
     return [];
@@ -110,39 +164,104 @@ export function generateCandlesAlongPath(
   
   // Calculate effective candle count so candles follow path evenly
   const effectiveCandleCount = Math.max(
-    2,
+    3,
     Math.min(80, Math.round(baseCount / safeSpacing))
   );
 
+  const totalLength = arcData.totalLength;
+  const startPoint = pathPoints[0];
+  const endPoint = pathPoints[pathPoints.length - 1];
+
+  // Minimum safe step along the path between candle centers to avoid horizontal/spatial overlay
+  const minSafeStep = 0.0075 * safeSpacing;
+  const minRequiredDist = (effectiveCandleCount - 1) * minSafeStep;
+
+  // Determine trajectory step and total span
+  let stepDist: number;
+  let totalTrajectoryDist: number;
+
+  if (autoAdjust) {
+    if (totalLength >= minRequiredDist) {
+      // Standard: Candles fit within path by auto-adjusting space, width, and height.
+      // Starts at start point, stops EXACTLY at destination point.
+      stepDist = totalLength / (effectiveCandleCount - 1);
+      totalTrajectoryDist = totalLength;
+    } else {
+      // Exception: Candles have fit to lowest width/height, but path is too short to fit all.
+      // Expands along the path trajectory past the stop point just enough to avoid overlay.
+      stepDist = minSafeStep;
+      totalTrajectoryDist = (effectiveCandleCount - 1) * stepDist;
+    }
+  } else {
+    // Manual Raw Mode: Strictly divide total length by candle count
+    stepDist = totalLength / (effectiveCandleCount - 1);
+    totalTrajectoryDist = totalLength;
+  }
+
   const candles: Candle[] = [];
-  let previousCloseNormY = pathPoints[0].y;
+  let previousCloseNormY = startPoint.y;
 
   for (let i = 0; i < effectiveCandleCount; i++) {
-    // Current candle position along the path from 0.0 (start) to 1.0 (end)
-    const tCurrent = effectiveCandleCount > 1 ? i / (effectiveCandleCount - 1) : 0;
-    const ptCurrent = getPointAtArcLengthFraction(pathPoints, tCurrent, arcData);
+    const sCurrent = i * stepDist;
+    const ptCurrent = getTrajectoryPointAtDistance(pathPoints, sCurrent, arcData);
 
-    // Next point along the path for calculating candle close direction
-    const tNext = effectiveCandleCount > 1 ? Math.min(1.0, (i + 1) / (effectiveCandleCount - 1)) : 1.0;
-    const ptNext = getPointAtArcLengthFraction(pathPoints, tNext, arcData);
+    const sNext = Math.min(totalTrajectoryDist, (i + 1) * stepDist);
+    const ptNext = getTrajectoryPointAtDistance(pathPoints, sNext, arcData);
 
+    // Candle X coordinate strictly follows the path trajectory
     const candleX = ptCurrent.x;
-    const openNormY = i === 0 ? pathPoints[0].y : previousCloseNormY;
-    
-    // For intermediate candles, close moves toward the next segment point
-    const closeNormY = i === effectiveCandleCount - 1 ? ptCurrent.y : ptNext.y;
 
-    // In charts, smaller Y = higher price (Bullish)
+    // Open: First candle opens at exact path start point Y; subsequent candles open at previous close
+    const openNormY = i === 0 ? startPoint.y : previousCloseNormY;
+
+    // Close: Last candle closes at exact destination point Y (when not expanded);
+    // intermediate candles close toward next path waypoint point Y
+    let closeNormY: number;
+    if (i === effectiveCandleCount - 1) {
+      // Final candle terminates at destination point
+      closeNormY = totalLength >= minRequiredDist ? endPoint.y : ptCurrent.y;
+    } else {
+      let targetY = ptNext.y;
+      // Prevent completely flat zero-height body if segment is purely horizontal
+      if (Math.abs(targetY - openNormY) < 0.0015) {
+        const tinyOffset = ((i % 2 === 0 ? 1 : -1) * 0.003) * heightScale;
+        targetY = openNormY + tinyOffset;
+      }
+      closeNormY = targetY;
+    }
+
+    // In chart coordinates: smaller Y = higher price (Bullish)
     const isBullish = closeNormY <= openNormY;
     const bodyHeightNorm = Math.abs(closeNormY - openNormY);
 
-    // Dynamic clean wicks matching price movement
     const topOfBodyNormY = Math.min(openNormY, closeNormY);
     const bottomOfBodyNormY = Math.max(openNormY, closeNormY);
 
-    const wickExtension = Math.max(0.003, bodyHeightNorm * 0.25) * heightScale;
-    const highNormY = Math.max(0.002, topOfBodyNormY - wickExtension);
-    const lowNormY = Math.min(0.998, bottomOfBodyNormY + wickExtension);
+    let highNormY: number;
+    let lowNormY: number;
+
+    if (i === effectiveCandleCount - 1 && totalLength >= minRequiredDist) {
+      // DESTINATION CANDLE:
+      // Strictly clamp wicks at destination point so the candle never shoots above/below destination!
+      if (isBullish) {
+        // Bullish close is at topOfBodyNormY: Do not overshoot above the destination point!
+        highNormY = topOfBodyNormY;
+        lowNormY = Math.min(0.998, bottomOfBodyNormY + Math.max(0.002, bodyHeightNorm * 0.2) * heightScale);
+      } else {
+        // Bearish close is at bottomOfBodyNormY: Do not overshoot below the destination point!
+        lowNormY = bottomOfBodyNormY;
+        highNormY = Math.max(0.002, topOfBodyNormY - Math.max(0.002, bodyHeightNorm * 0.2) * heightScale);
+      }
+    } else {
+      // INTERMEDIATE CANDLES:
+      const pseudoRand = Math.sin(i * 791.9 + 23.4) * 0.5 + 0.5;
+      const wickBase = Math.max(0.002, bodyHeightNorm * 0.22) * heightScale;
+      const upperWick = wickBase * (isBullish ? 0.65 + 0.25 * pseudoRand : 0.35 + 0.2 * pseudoRand);
+      const lowerWick = wickBase * (isBullish ? 0.35 + 0.2 * pseudoRand : 0.65 + 0.25 * pseudoRand);
+
+      highNormY = Math.max(0.002, topOfBodyNormY - upperWick);
+      lowNormY = Math.min(0.998, bottomOfBodyNormY + lowerWick);
+    }
 
     candles.push({
       open: 100,
