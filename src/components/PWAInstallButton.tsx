@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Download, 
   Smartphone, 
@@ -64,23 +65,27 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
         )}
       </button>
 
-      {/* Success Banner if installed */}
-      {installedNotice && (
-        <div className="fixed top-16 right-4 z-50 flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-emerald-500/90 text-slate-950 font-bold text-xs shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+      {/* Success Banner if installed - portaled to document.body to avoid parent positioning issues */}
+      {installedNotice && typeof document !== 'undefined' && createPortal(
+        <div className="fixed top-16 right-4 z-[100] flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-emerald-500 text-slate-950 font-bold text-xs shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
           <Check className="w-4 h-4 stroke-[3]" />
           <span>App installed to your device home screen!</span>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Installation Modal / Guide (for iOS Safari, Chrome desktop, or manual installs) */}
-      {showGuide && (
+      {/* Installation Modal / Guide - Portaled to document.body so it is never clipped by headers or filters */}
+      {showGuide && typeof document !== 'undefined' && createPortal(
         <div 
           id="pwa-install-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowGuide(false);
+          }}
         >
-          <div className="relative w-full max-w-md bg-[#16181D] border border-[#2D3139] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2D3139] bg-[#0A0B0D]/80">
+          <div className="relative w-full max-w-md bg-[#16181D] border border-[#2D3139] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] my-auto animate-in zoom-in-95 duration-150">
+            {/* Modal Header - shrink-0 ensures title is always fully visible */}
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-[#2D3139] bg-[#0A0B0D]/90">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center text-slate-950 shadow-md">
                   <Smartphone className="w-4.5 h-4.5" />
@@ -101,8 +106,8 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-5 space-y-4 overflow-y-auto text-xs text-slate-300">
+            {/* Modal Content - scrollable if viewport is small */}
+            <div className="flex-1 min-h-0 p-5 space-y-4 overflow-y-auto text-xs text-slate-300">
               {/* Feature Highlights */}
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-2.5 rounded-2xl bg-[#0A0B0D] border border-slate-800 flex flex-col items-center gap-1">
@@ -183,8 +188,8 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-5 py-3 border-t border-[#2D3139] bg-[#0A0B0D]/80 flex justify-end">
+            {/* Modal Footer - shrink-0 ensures button is always visible */}
+            <div className="shrink-0 px-5 py-3 border-t border-[#2D3139] bg-[#0A0B0D]/90 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowGuide(false)}
@@ -194,7 +199,8 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
